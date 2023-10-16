@@ -6,7 +6,6 @@ class Block:
         self.w1 = []
         self.w2 = []
         self.w3 = []
-        test = []
 
 
         for byte in data[0]:
