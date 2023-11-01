@@ -37,58 +37,66 @@ InvSbox = [
 ]
 Rcon = [0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36]
 
-def GMul(a, b): #GF(256) multiplication of two bytes
+def galois_mult(a, b):
     p = 0
-
+    hi_bit_set = 0
     for i in range(8):
-        if ((b & 1) != 0):
-            p ^= a
-        
-        hi_bit_set = (a & 0x80) != 0
+        if b & 1 == 1: p ^= a
+        hi_bit_set = a & 0x80
         a <<= 1
-        if (hi_bit_set):
-            a ^= 0x1B
-        b >>1
+        if hi_bit_set == 0x80: a ^= 0x1b
+        b >>= 1
+    return p % 256
+def KeyExpansion(key, Nk=4, Nb=4, Nr=10) -> list:
+    #Generates 4*(Nr + 1) words
+    #Linear array of words, denoted w[i], 0 <= i <= 4*(Nr + 1)
 
-    return p
+    # 44 words for 128 bit key
+    w = [0] * (4 * (Nr + 1))
 
-def copy(x):
-    """Shallow copy operation on arbitrary Python objects.
+    # Copying initial key to first four words of expanded key
+    w[0] = key[0:4]
+    w[1] = key[4:8]
+    w[2] = key[8:12]
+    w[3] = key[12:16]
 
-    See the module's __doc__ string for more info.
-    """
+    i = Nk
+    while(i < Nb*(Nr+1)):
+        temp = w[i-1]     
+        if i % Nk == 0:
+            temp = SubWord(RotWord(temp))
+            temp[0] ^= Rcon[(i//Nk)]
 
-    cls = type(x)
+        #for larger keys
+        #elif(Nk > 6 and i % Nk == 4):
+            #temp = self.SubWord(temp)
 
-    copier = _copy_dispatch.get(cls)
-    if copier:
-        return copier(x)
+        w[i] = [w[i-Nk][j] ^ temp[j] for j in range(4)]
+        i += 1
+    return w
 
-    if issubclass(cls, type):
-        # treat it as a regular class:
-        return _copy_immutable(x)
+def RotWord(word):
+    return word[1:] + word[:1]
 
-    copier = getattr(cls, "__copy__", None)
-    if copier is not None:
-        return copier(x)
+def SubWord(word):
+    return [Sbox[word[0]], Sbox[word[1]], Sbox[word[2]], Sbox[word[3]]]
 
-    reductor = dispatch_table.get(cls)
-    if reductor is not None:
-        rv = reductor(x)
-    else:
-        reductor = getattr(x, "__reduce_ex__", None)
-        if reductor is not None:
-            rv = reductor(4)
-        else:
-            reductor = getattr(x, "__reduce__", None)
-            if reductor:
-                rv = reductor()
-            else:
-                raise Error("un(shallow)copyable object of type %s" % cls)
+# pads with 0s
+def toMatrix(byte_data):
+    matrix = [[0] * 4 for _ in range(4)]
 
-    if isinstance(rv, str):
-        return x
-    return _reconstruct(x, None, *rv)
+    while len(byte_data) < 16:
+        byte_data += b'\x00'
 
+    for i in range(4):
+        for j in range(4):
+            matrix[j][i] = byte_data[i * 4 + j]
+    return matrix
 
-_copy_dispatch = d = {}
+# prints words by row
+def display(state):
+    for word in state:
+        for byte in word:
+            print(hex(byte))
+        print("\n")
+
