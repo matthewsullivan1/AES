@@ -1,35 +1,83 @@
-from Block import Block
-from utils import Sbox, InvSbox, Rcon, GMul
-import binascii
+from utils import Sbox, InvSbox, Rcon, galois_mult, KeyExpansion, toMatrix, display
 
 class Aes:
-    def __init__(self, state, expanded_key):
+    def __init__(self, input, output, key, Nk=4, Nb=4, Nr=10):
+        self.key = KeyExpansion(key)
+
+        '''
+        with open(input, 'r') as f:
+            with open(output, 'wb') as output_f:
+                plaintext = f.read(16)
+                state = toMatrix(plaintext)  
+                self.Encrypt(state)              
+        '''
+
+                #test = Block(state)
+        # Reading from the input text file in text mode
+        '''
+        with open(input, "r") as input_file:
+            text_data = input_file.read(16)
+
+        # Encoding the text to bytes using UTF-8
+            byte_data = text_data.encode('utf-8')
+            state = toMatrix(byte_data)
+        '''
+
+        # assume this is coming from the input file
+        '''
+        state = [[0x32, 0x88, 0x31, 0xE0],
+            [0x43, 0x5A, 0x31, 0x37],
+            [0xF6, 0x30, 0x98, 0x07],
+            [0xA8, 0x8D, 0xA2, 0x34]]
+        '''
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
         self.state = state
-        self.key = expanded_key #44 words
+        self.Encrypt()
+
+
+        #toMatrix(byte_data)
+
+        # Perform AES encryption on 'byte_data'
+
+        # Decoding the byte data back to text using UTF-8 after decryption
+        #decrypted_text = byte_data.decode('utf-8')
+
+        # Writing the decrypted text to the output text file
+        #with open(output, "w") as output_file:
+            #output_file.write(decrypted_text)
+
 
     def Encrypt(self):
-        self._Encrypt()
-
-    def _Encrypt(self) -> list:
-        
-        round = 0
-        self.AddRoundKey(round)
-        round += 1
-        for i in range(9):
-            #print(self.state)
+        self.AddRoundKey(0)
+        for i in range(1,10):
             self.SubBytes()
             self.ShiftRows()
             self.MixColumns()
-            self.AddRoundKey(round)
-            round += 1
+            self.AddRoundKey(i)
         self.SubBytes()
         self.ShiftRows()
-        self.AddRoundKey(round)
-            
+        self.AddRoundKey(10)
+        
+        display(self.state)
+        
     def AddRoundKey(self, round):
         for i in range(4):
             for j in range(4):
-                self.state[i][j] ^= self.key[(round * 4)+ i][j]
+                self.state[i][j] ^= self.key[(round * 4)+ j][i]
+
     def SubBytes(self):
         for i in range(4):
             for j in range(4):
@@ -41,47 +89,32 @@ class Aes:
         self.state[3] = self.state[3][3:] + self.state[3][:3]
 
     def MixColumns(self):
-        return
-        ss = [[0]*4]*4
-
+        # Transpose state so that each column is a row
+        # Can then pass self.state[i] -> MixColumn instead of extracting the column first
+        # Transpose again after to restore 
+        self.state = list(map(list, zip(*self.state)))
+        
         for i in range(4):
-            ss[0][i] = (GMul(0x02, self.state[0][i]) ^ GMul(0x03, self.state[1][i]) ^ self.state[2][i] ^ self.state[3][i])
-            ss[1][i] = (self.state[0][i] ^ GMul(0x02, self.state[1][i]) ^ GMul(0x03, self.state[2][i]) ^ self.state[3][i])
-            ss[2][i] = (self.state[0][i] ^ self.state[1][i] ^ GMul(0x02, self.state[2][i]) ^ GMul(0x03, self.state[3][i]))
-            ss[3][i] = (GMul(0x03, self.state[0][i]) ^ self.state[1][i] ^ self.state[2][i] ^ GMul(0x02, self.state[3][i]))
+            temp = self.MixColumn(self.state[i])
+            self.state[i] = temp
+        
+        self.state = list(map(list, zip(*self.state)))
 
-        print(ss)
-        print(self.state)
-        for i in range(4):
-            for j in range(4):
-                self.state[i][j] = ss[i][j]
+    def MixColumn(self, column):
+        temp = column # Store temporary column for operations
+        column = [0x00] * 4 #not sure why this fixed MixColumns() but im glad i thought to try it 
 
-    def mix_column(self, column):
-        pass
+        column[0] = galois_mult(temp[0], 2) ^ galois_mult(temp[1], 3) ^ \
+                galois_mult(temp[2], 1) ^ galois_mult(temp[3], 1)
+        column[1] = galois_mult(temp[0], 1) ^ galois_mult(temp[1], 2) ^ \
+                galois_mult(temp[2], 3) ^ galois_mult(temp[3], 1)
+        column[2] = galois_mult(temp[0], 1) ^ galois_mult(temp[1], 1) ^ \
+                galois_mult(temp[2], 2) ^ galois_mult(temp[3], 3)
+        column[3] = galois_mult(temp[0], 3) ^ galois_mult(temp[1], 1) ^ \
+                galois_mult(temp[2], 1) ^ galois_mult(temp[3], 2)
+        
+        return column
 
 
     def Decrypt():
         pass
-
-
-    
-    '''
-    test = Aes(key, "test.txt")
-
-    #rk = test.GetRoundKey(0)
-    for word in test.expanded_key:
-        for byte in word:
-            print(hex(byte))
-        print("\n")
-    
-# Iterate through the 44 lists in the expanded key
-    for i, key_list in enumerate(test.expanded_key):
-        print(f"Word {i}:")
-    
-        # Iterate through the words in each list and print them in hex format
-        for word in key_list:
-            print(f"{hex(word)}", end=' ')
-    
-        print("\n")  # Move to the next line for the next key
-
-    '''
