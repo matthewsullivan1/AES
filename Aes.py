@@ -1,87 +1,68 @@
-from utils import Sbox, InvSbox, Rcon, galois_mult, KeyExpansion, toMatrix, display
+from utils import Sbox, InvSbox, Rcon, galois_mult, KeyExpansion, toMatrix, display, writeToFile, pad
 
 class Aes:
-    def __init__(self, input, output, key, Nk=4, Nb=4, Nr=10):
+    def __init__(self, input_file, output_file, key, mode=None, Nk=4, Nb=4, Nr=10):
         self.key = KeyExpansion(key)
-
-        '''
-        with open(input, 'r') as f:
-            with open(output, 'wb') as output_f:
-                plaintext = f.read(16)
-                state = toMatrix(plaintext)  
-                self.Encrypt(state)              
-        '''
-
-                #test = Block(state)
-        # Reading from the input text file in text mode
-        '''
-        with open(input, "r") as input_file:
-            text_data = input_file.read(16)
-
-        # Encoding the text to bytes using UTF-8
-            byte_data = text_data.encode('utf-8')
-            state = toMatrix(byte_data)
-        '''
-
-        # assume this is coming from the input file
-        '''
-        state = [[0x32, 0x88, 0x31, 0xE0],
-            [0x43, 0x5A, 0x31, 0x37],
-            [0xF6, 0x30, 0x98, 0x07],
-            [0xA8, 0x8D, 0xA2, 0x34]]
-        '''
-
-
-
-
-
-
-
-
-
-
-
-
-
         
-        self.state = state
-        self.Encrypt()
+        if not mode:
+            while (mode != 'd') and (mode != 'e'):
+                mode = str(input("Enter mode (e -> encrypt, d -> decrypt): "))
+        if mode == 'd':
+            temp = input_file
+            input_file = output_file
+            output_file = temp
 
+        '''
+        Reads 16 bytes at a time from input file, pads with 0x23 if the length is less than 16 
+        bytes, calls Encrypt() / Decrypt() based on the mode until the entire file is read
+        '''
+        with open(input_file, "rb") as file:
+            while True:
+                byte_array = list(file.read(16))
 
-        #toMatrix(byte_data)
+                if not byte_array:
+                    break                    
+                pad(byte_array)
 
-        # Perform AES encryption on 'byte_data'
-
-        # Decoding the byte data back to text using UTF-8 after decryption
-        #decrypted_text = byte_data.decode('utf-8')
-
-        # Writing the decrypted text to the output text file
-        #with open(output, "w") as output_file:
-            #output_file.write(decrypted_text)
-
+                state = [[0 for _ in range(4)] for _ in range(4)]
+                toMatrix(byte_array, state)
+                    
+                self.state = state
+                if mode == 'e':  
+                    self.Encrypt()
+                else: 
+                    self.Decrypt()
+                
+                writeToFile(state, output_file)
 
     def Encrypt(self):
+        # Initial round
         self.AddRoundKey(0)
+
+        # Intermediate rounds
         for i in range(1,10):
             self.SubBytes()
             self.ShiftRows()
             self.MixColumns()
             self.AddRoundKey(i)
+        
+        # Final round
         self.SubBytes()
         self.ShiftRows()
         self.AddRoundKey(10)
-        
-        display(self.state)
-        
+                
     def AddRoundKey(self, round):
         for i in range(4):
             for j in range(4):
                 self.state[i][j] ^= self.key[(round * 4)+ j][i]
-
     def SubBytes(self):
         for i in range(4):
             for j in range(4):
                 self.state[i][j] = Sbox[self.state[i][j]]
+    def InvSubBytes(self):
+        for i in range(4):
+            for j in range(4):
+                self.state[i][j] = InvSbox[self.state[i][j]]
 
     def ShiftRows(self):
         self.state[1] = self.state[1][1:] + self.state[1][:1]
@@ -101,8 +82,8 @@ class Aes:
         self.state = list(map(list, zip(*self.state)))
 
     def MixColumn(self, column):
-        temp = column # Store temporary column for operations
-        column = [0x00] * 4 #not sure why this fixed MixColumns() but im glad i thought to try it 
+        temp = column # Temp column for operations
+        column = [0x00] * 4 # Set old column data back to 0 
 
         column[0] = galois_mult(temp[0], 2) ^ galois_mult(temp[1], 3) ^ \
                 galois_mult(temp[2], 1) ^ galois_mult(temp[3], 1)
@@ -115,6 +96,47 @@ class Aes:
         
         return column
 
+    def Decrypt(self):
+        # Initial round
+        self.AddRoundKey(10)
+        self.InvShiftRows()
+        self.InvSubBytes()
 
-    def Decrypt():
-        pass
+        # Intermediate rounds
+        for i in range(9, 0, -1):
+            self.AddRoundKey(i)
+            self.InvMixColumns()
+            self.InvShiftRows()
+            self.InvSubBytes()
+
+        # Final round
+        self.AddRoundKey(0)
+
+    def InvShiftRows(self):
+        self.state[1] = self.state[1][-1:] + self.state[1][:-1]
+        self.state[2] = self.state[2][-2:] + self.state[2][:-2]
+        self.state[3] = self.state[3][-3:] + self.state[3][:-3]
+
+    def InvMixColumns(self):
+        self.state = list(map(list, zip(*self.state)))
+        
+        for i in range(4):
+            temp = self.InvMixColumn(self.state[i])
+            self.state[i] = temp
+        
+        self.state = list(map(list, zip(*self.state)))
+
+    def InvMixColumn(self, column):
+        temp = column # Temp column for operations
+        column = [0x00] * 4 # Set old data back to 0 
+
+        column[0] = galois_mult(temp[0], 14) ^ galois_mult(temp[1], 11) ^ \
+                galois_mult(temp[2], 13) ^ galois_mult(temp[3], 9)
+        column[1] = galois_mult(temp[0], 9) ^ galois_mult(temp[1], 14) ^ \
+                galois_mult(temp[2], 11) ^ galois_mult(temp[3], 13)
+        column[2] = galois_mult(temp[0], 13) ^ galois_mult(temp[1], 9) ^ \
+                galois_mult(temp[2], 14) ^ galois_mult(temp[3], 11)
+        column[3] = galois_mult(temp[0], 11) ^ galois_mult(temp[1], 13) ^ \
+                galois_mult(temp[2], 9) ^ galois_mult(temp[3], 14)
+        
+        return column
