@@ -82,16 +82,12 @@ def SubWord(word):
     return [Sbox[word[0]], Sbox[word[1]], Sbox[word[2]], Sbox[word[3]]]
 
 # pads with 0s
-def toMatrix(byte_data):
-    matrix = [[0] * 4 for _ in range(4)]
-
-    while len(byte_data) < 16:
-        byte_data += b'\x00'
-
+def toMatrix(byte_array, state):
     for i in range(4):
-        for j in range(4):
-            matrix[j][i] = byte_data[i * 4 + j]
-    return matrix
+        state[i][0] = byte_array[i]
+        state[i][1] = byte_array[i + 4]
+        state[i][2] = byte_array[i + 8]
+        state[i][3] = byte_array[i + 12]
 
 # prints words by row
 def display(state):
@@ -99,4 +95,32 @@ def display(state):
         for byte in word:
             print(hex(byte))
         print("\n")
+
+def display_ascii(state):
+    state = list(map(list, zip(*state)))
+    ascii_str = ""
+    for row in state:
+        for hex_int in row:
+            ascii_char = chr(hex_int)
+            ascii_str += ascii_char
+    print(ascii_str)
+
+def writeToFile(state, output_file_path):
+
+    state = list(map(list, zip(*state)))
+    ascii_str = ""
+    for row in state:
+        for hex_int in row:
+            ascii_char = chr(hex_int)
+            print(ascii_char)
+            ascii_str += ascii_char
+    
+    print(ascii_str)
+
+    with open(output_file_path, "ab") as output_file:
+        output_file.write(bytearray(ascii_str, 'utf-8'))
+
+def pad(byte_array):
+    while len(byte_array) < 16:
+        byte_array.append(0x23)
 
